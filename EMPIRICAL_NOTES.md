@@ -177,31 +177,64 @@ include the ~17-step Merkle proof skeleton from KIP-6's formula
 
 ---
 
-## Finding 2 — Selected chain grows ~2 chain-blocks/sec, not 1
+## Finding 2 — Selected chain grows ~1.8 chain-blocks/sec; ~18 % of all blocks are chain blocks
 
-**Measurement:** Run 1 had 245,927 chain blocks across ~34.2 hours of
-pruning window; Run 2 had 196,531 across ~27.3 hours. Both yield **~2.0
-chain-blocks per second** of wall-clock.
+**Important distinction.** Kaspa's **block-production rate** is 10 blocks/sec
+(target inter-block time = 100 ms — the "10 BPS" parameter). The **selected
+chain growth rate** is a different, smaller quantity: only one block at any
+given height becomes the next selected parent in GHOSTDAG; the rest are
+merged into the DAG but aren't on the chain backbone. KIP-6's formula uses
+the selected-chain rate, not the block-production rate. KUN's `chain[]`
+array contains only selected-chain blocks (returned by
+`get_virtual_chain_from_block`).
 
-**KIP-6 assumption (§ "Size of PoChM"):** 1 selected-chain block per second
-(stated as a "reliable upper bound").
+**Measurement.** We derive the pruning-window length directly from the
+node's `block_count` divided by 10 BPS (rather than guessing where in the
+sawtooth we sit), then divide observed chain length by that window:
 
-**Delta:** 2 × amplification in chain length.
+| Run | `block_count` (total DAG) | Pruning window | Chain blocks (selected) | Chain rate | Selected fraction |
+|---|---|---|---|---|---|
+| Run 1 | 1,361,983 | ~37.8 h | 245,927 | **1.81 chain blk/sec** | 18.1 % |
+| Run 2 | 1,119,371 | ~31.1 h | 196,531 | **1.76 chain blk/sec** | 17.6 % |
 
-**Mechanism:** KIP-6 notes that chain growth is network-limited, not
-BPS-limited — this is correct in the limit — but the calibration point was
-pre-Crescendo. Post-KIP-14 the chain density appears to have doubled
-(possibly because merge sets are smaller on average, or because GHOSTDAG
-blue-work resolution is more decisive, or both — not investigated here).
+Both runs cluster tightly around **~1.8 chain blocks/sec** and **~18 %
+selectivity**.
 
-**Why it matters:** the `N` in KIP-6's formula is "seconds between
-consecutive posterity headers," i.e. 86,400 at 24 h density. If chain grows
-at 2/s instead of 1/s, the number of chain blocks between posterities is
-172,800, and `log₂(N)` shifts from ~17 to ~18. Proof size scales
-`(2·log₂(log₂(N)) + 1)·log₂(N)`, so the effect is sublinear but real.
+**KIP-6 assumption (§ "Size of PoChM"):** ≤ 1 selected-chain block/sec
+("reliable upper bound"), with the qualitative observation that "about half
+of the blocks are chain blocks" at 1 BPS.
 
-**Implication:** a minor correction to the KIP-6 size formula when
-re-derived for post-Crescendo conditions.
+**Delta:**
+- Chain rate: **1.8 ×** KIP-6's stated upper bound (1.8 vs 1.0 chain blk/sec)
+- Selected-block fraction: **18 % at 10 BPS**, vs KIP-6's "about half (≈ 50 %) at 1 BPS"
+
+**Mechanism.** Two things change when BPS increases from 1 to 10:
+1. **Total DAG block production** scales linearly (10× more blocks/sec)
+2. **Selected-chain growth** scales sub-linearly because the DAG widens —
+   more blocks compete for selected-parent status, fewer end up on the
+   backbone, so the chain rate goes from ~0.5/sec at 1 BPS to ~1.8/sec at
+   10 BPS (3.6× growth in chain rate vs 10× growth in block production).
+3. The **selected fraction** drops from ~50 % to ~18 % accordingly.
+
+This matches KIP-6's qualitative observation: "the growth of the selected
+chain is not governed by block rates, but by network conditions." Both the
+1.8/sec rate and the 18 % selectivity ARE network-bounded; they just both
+shifted from KIP-6's calibration point.
+
+**Why it matters.** The `N` in KIP-6's PoChM formula is "seconds between
+consecutive posterity headers," fixed at 86,400 (24 h density). The chain
+rate affects how many *chain blocks* sit inside that interval (~155,520 at
+1.8/sec vs the formula's implicit 86,400 at 1/sec), which in turn shifts
+`log₂(N)` from 17 to ~17.2. Proof size scales as
+`(2·log₂(log₂(N)) + 1)·log₂(N)·L_a + L_e·(log₂(N) − 1)`, so the effect on
+the projected post-KIP-6 PoChM is small (a few percent) — but worth
+documenting because the qualitative claim "chain rate doubled" is
+incorrect; "chain rate is ~1.8× the upper bound" is the right phrasing.
+
+**Implication.** A minor correction to KIP-6's size-formula calibration. The
+more interesting follow-up is **why the selected fraction dropped from ~50 %
+to ~18 % when BPS rose 10×** — does merge-set saturation drive this? Are
+short reorgs eating chain blocks? An open research question.
 
 ---
 
@@ -209,8 +242,8 @@ re-derived for post-Crescendo conditions.
 
 **Measurement:** identical tool, identical node, 5 hours apart:
 
-- Run 1 (34.2 h into the cycle, just before the next advance): **1.39 GiB**
-- Run 2 (27.3 h into the cycle, just after an advance):       **1.12 GiB**
+- Run 1 (~37.8 h pruning window — about 65 % of the way through the cycle): **1.39 GiB**
+- Run 2 (~31.1 h pruning window — just after an advance, near the cycle's lower end): **1.12 GiB**
 
 Delta: **19.6 %** reduction from just-before-advance to just-after.
 
@@ -221,9 +254,12 @@ point), so its chain length tracks the sawtooth linearly.
 
 **Cross-reference (MyKAI observatory):** the user's own MyKAI pruning
 advance history — 23 recorded advances with 86% cadence compliance to the
-12 h clock — independently confirms this 30-42 h sawtooth. The 20% proof-
-size amplitude we measure is exactly what a 30/42 ratio (30/42 = 0.714, so
-29% below the max) would predict.
+12 h clock — independently confirms this 30-42 h sawtooth. The theoretical
+maximum size swing across one full cycle is 30/42 = 0.714, so up to
+**28.6 %** below max. Our observed swing is 19.6 %, which makes sense:
+Run 1 was at 37.8 h (about 65 % of the way through the cycle, NOT at the
+maximum) and Run 2 was at 31.1 h (very close to the minimum). We sampled a
+partial-amplitude excursion, not the full sawtooth peak-to-peak.
 
 **Why it matters:** any empirical PoChM measurement reported without the
 position-in-pruning-cycle timestamp is ambiguous by ±10%. Papers should
@@ -239,20 +275,27 @@ automated sampler that waits for pruning advances.
 ## Composite multiplier vs KIP-6 theoretical baseline
 
 KIP-6 § "Size of PoChM" gives 24 MB as the worst-case pre-fork diamond PoChM
-at 1 BPS and 24 h posterity density.
+at 1 BPS and 24 h posterity density. That figure assumes the pruning window
+contains exactly N = 86,400 selected-chain blocks (i.e. 1 chain block/sec ×
+24 h × 3,600 s/h) and L_e = 248 B per header.
 
 Our empirical measurement at 10 BPS:
 
 | Component | KIP-6 1 BPS | Our 10 BPS empirical | Ratio |
 |---|---|---|---|
-| Chain blocks | 86,400 | 196,531 – 245,927 | 2.3 – 2.8 × |
-| Avg bytes / header | 248 | 6,082 – 6,118 | 24.5 – 24.7 × |
+| Pruning-window length (h) | 24 | ~31.1 – 37.8 | 1.3 – 1.6 × |
+| Selected-chain rate (chain blocks/sec) | 1.0 | ~1.76 – 1.81 | 1.8 × |
+| Chain blocks (= rate × window) | 86,400 | 196,531 – 245,927 | 2.3 – 2.8 × |
+| Avg bytes / header (`L_e`) | 248 | 6,077 – 6,115 | 24.5 – 24.7 × |
+| Selected fraction of total DAG | "about half" (~50 %) | **17.6 – 18.1 %** | drops 2.8 × at 10 BPS |
 | Total proof size | 24 MB | 1.12 – 1.39 GiB | **47 – 58 ×** |
 
-The amplification is essentially multiplicative: chain is 2.3–2.8× longer,
-headers are ~24.6× bigger, so the product is ~55–69×. Empirically we observe
-47–58×, reasonably close (the rest is borsh encoding overhead and aux_parents
-length prefixes).
+The amplification is essentially multiplicative: chain is 2.3–2.8× longer
+(both because the pruning window is longer than the assumed 24 h and
+because the chain rate is 1.8× higher than the upper-bound assumption) and
+headers are ~24.6× bigger. The product is ~57–69×. Empirically we observe
+47–58×, reasonably close (the rest is borsh encoding overhead, slight
+sub-multiplicative drift, and `aux_parents` length prefixes).
 
 Naively multiplying KIP-6's 1 BPS figure by 10 (for the BPS increase) gives
 240 MB; reality is **4.7 – 5.8 × worse than naive 10× scaling** because of
@@ -438,3 +481,11 @@ document with a new measurement pass — do not edit the numbers in place.
   (per-field header decomposition). Resolves the "9 KB vs 100 KB"
   ambiguity in Finding 1's implication. Restructured Reorg-safety
   section to separate normal vs adversarial network conditions.
+- **v0.1.1+** (2026-04-25): tightened Finding 2 — chain rate is **1.8**
+  chain blocks/sec, not 2.0; pruning-window length now derived directly
+  from `block_count / 10 BPS` (37.8 h and 31.1 h, not the previously
+  guessed 34.2 h and 27.3 h). Added the empirical "selected-chain
+  fraction" datum: **~18 %** of all blocks are on the selected chain at
+  10 BPS, vs KIP-6's "about half" at 1 BPS. Composite multiplier table
+  re-derived. Distinction between block-production rate (10/sec) and
+  selected-chain rate (~1.8/sec) made explicit.

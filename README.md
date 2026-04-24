@@ -43,9 +43,16 @@ field. `aux_parents` is reserved (v0.2 strict mode) and empty today.
 |---|---|---|---|
 | **1. `L_e` (avg bytes/header)** | 248 B (pre-Crescendo) | 6,077 – 6,115 B | **24.6 ×** |
 | **1.5. share of `parents_by_level` in each header** | not isolated; treated as part of `L_e` | **96.3 %** of every byte | dominates the field |
-| **2. selected-chain growth rate** | ~1 block/sec ("reliable upper bound") | ~2.0 chain blocks/sec | **2 ×** |
-| **3. proof-size sawtooth amplitude** | not modelled | 19.6 % swing across 12 h pruning cycle | new methodological note |
+| **2a. selected-chain growth rate** | ≤ 1 chain block/sec ("reliable upper bound") | **~1.8 chain blocks/sec** | **1.8 ×** |
+| **2b. selected-block fraction of total DAG** | "about half" (~50 % at 1 BPS) | **~18 %** at 10 BPS | dropped 2.8 × |
+| **3. proof-size sawtooth amplitude** | not modelled | 19.6 % swing observed (max possible 28.6 %) across 12 h pruning cycle | new methodological note |
 | **Composite: post-KIP-6 PoChM** | ~9 KB | with full headers as PMR leaves: **~100 KB**<br>with stripped headers: **~6.4 KB** | depends on PMR-leaf design |
+
+Note on the block-rate distinction: Kaspa's BLOCK PRODUCTION rate is
+10 blocks/sec total DAG (target inter-block time = 100 ms). The
+SELECTED chain (the linear backbone GHOSTDAG picks via blue-work
+argmax) grows at only ~1.8 of those 10 blocks/sec — KIP-6's PoChM
+formula uses the selected-chain rate, not the block-production rate.
 
 Finding 1.5 — that `parents_by_level` is 96 % of every header — is the
 most consequential. KIP-6's "9 KB" projection is approximately right
