@@ -37,7 +37,24 @@ straddling a pruning-point advance:
 **Bytes are dominated by headers:** 99.93 % of proof size is the `chain`
 field. `aux_parents` is reserved (v0.2 strict mode) and empty today.
 
-Full analysis in [`EMPIRICAL_NOTES.md`](EMPIRICAL_NOTES.md).
+### Comparison with KIP-6 predictions
+
+| Finding | KIP-6 assumption | KUN measurement | Delta |
+|---|---|---|---|
+| **1. `L_e` (avg bytes/header)** | 248 B (pre-Crescendo) | 6,077 – 6,115 B | **24.6 ×** |
+| **1.5. share of `parents_by_level` in each header** | not isolated; treated as part of `L_e` | **96.3 %** of every byte | dominates the field |
+| **2. selected-chain growth rate** | ~1 block/sec ("reliable upper bound") | ~2.0 chain blocks/sec | **2 ×** |
+| **3. proof-size sawtooth amplitude** | not modelled | 19.6 % swing across 12 h pruning cycle | new methodological note |
+| **Composite: post-KIP-6 PoChM** | ~9 KB | with full headers as PMR leaves: **~100 KB**<br>with stripped headers: **~6.4 KB** | depends on PMR-leaf design |
+
+Finding 1.5 — that `parents_by_level` is 96 % of every header — is the
+most consequential. KIP-6's "9 KB" projection is approximately right
+*if* the PMR Merkle tree stores stripped headers (selected_parent +
+identity + PMR ≈ 97 B), and ~10× too small *if* full headers are used.
+This is now a design question for the KIP-6 author rather than
+theoretical.
+
+Full analysis: [`EMPIRICAL_NOTES.md`](EMPIRICAL_NOTES.md).
 
 ### Sample proofs for independent verification
 
@@ -49,6 +66,15 @@ verify them without running an 8-minute generation:
 - `fresh.proof` (1.12 GiB) — post pruning-advance
 
 **→ Hosted at:** `<link TBD — will be added once uploaded>`
+
+**SHA-256 checksums.** Verify the download integrity before running
+`kun proof verify`. On Windows: `Get-FileHash <path> -Algorithm SHA256`.
+On macOS/Linux: `sha256sum <path>`.
+
+```
+first.proof  sha256:86dca9e18900c4016bdca5a28fcabfafa120c5f1addb46561c430ce8659bb5f9
+fresh.proof  sha256:ebbe187c009b5a56946e81bf2df4a9858da05074fa196bc6c5448aeb0f47a22e
+```
 
 Verify via:
 
@@ -89,6 +115,17 @@ Generate + verify a proof end-to-end (~8 minutes on a local node):
 `-v` prints progress lines every ~5 seconds during the two fetch phases
 (paginated selected-chain hashes, then per-block headers).
 
+Decompose an existing proof into per-field byte counts (no node needed):
+
+```bash
+./target/release/kun proof header-stats my.proof
+./target/release/kun proof header-stats my.proof --out my.csv   # one row per header
+```
+
+The output table shows min / median / mean / p95 / max per field across
+every header in the chain, plus a stripped-vs-full PoChM projection for
+post-KIP-6 sizing.
+
 ## Local development against a patched rusty-kaspa
 
 If you have a local `rusty-kaspa` clone and want to iterate against it
@@ -128,19 +165,31 @@ lands.
 cargo test --workspace --lib
 ```
 
-Expected: 27 tests pass — Merkle known-answer, borsh round-trips, diamond
+Expected: 33 tests pass — Merkle known-answer, borsh round-trips, diamond
 proof round-trip + negative cases, header hashing, posterity chain
-invariants.
+invariants, plus six per-field-size invariants for `HeaderSizeBreakdown`
+covering V1, V2, dense superblock-level, and `cached_hash` cases.
 
 Integration tests that require a live node are gated on the
 `KUN_TEST_NODE_URL` environment variable and skip silently when unset.
 
+## Roadmap
+
+| Version | Scope | Status |
+|---|---|---|
+| **v0.1**   | Diamond-DAG PoChM generator + verifier; first empirical mainnet 10-BPS measurement; `kun proof generate / verify / size`; `kun bench proof-size` | shipped (Apr 2026) |
+| **v0.1.1** | Per-field header decomposition (`kun proof header-stats`); Methodology + Limitations docs; reorg-safety honesty pass; SHA-256 checksums for proof artifacts | shipped (Apr 2026) |
+| **v0.2**   | RocksDB storage; bootstrap + catch-up FSM; KIP-6 PMR **simulation** (compute PMR client-side, generate logarithmic PoChM, measure size); adaptive `safety_depth` driven by MyKAI network signals; batched header fetches (~5× faster generation); pure WASM verifier crate; Supabase telemetry | planned |
+| **v0.3**   | Stripped-header proof variant (subject to KIP-6 design clarification); superblock-level census on archival data; week-long automated sampling harness | planned |
+| **v1.0**   | Post-fork integration: real `BlockHeaderV2.pmr` from on-chain headers; production verifier API; library facade; phone-class verifier via WASM | gated on KIP-6 mainnet activation |
+
 ## Status
 
-Pre-v0.1 scaffolding, but producing real, reproducible measurements. The
-diamond-DAG baseline is what KIP-6 aims to replace with logarithmic-size
-Proof of Chain Membership (PoChM) after a future hard fork. Every
-sub-GB measurement we produce now is a baseline KIP-6 must improve on.
+v0.1.1 produces real, reproducible measurements with full per-field
+decomposition. The diamond-DAG baseline is what KIP-6 aims to replace
+with logarithmic-size Proof of Chain Membership after a future hard
+fork. Every sub-GB measurement we produce now is a baseline KIP-6
+must improve on.
 
 ## License
 

@@ -6,7 +6,8 @@ use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
 
 use kun_core::{
-    AnyHeader, DiamondProof, Hash, HashScheme, PosterityChain, PosterityHeader, ProofEnvelope, ProofKind, ProofPayload,
+    AnyHeader, DiamondProof, Hash, HashScheme, HeaderSizeBreakdown, PosterityChain, PosterityHeader, ProofEnvelope,
+    ProofKind, ProofPayload,
 };
 use kun_proofs::{diamond, verify_diamond_proof};
 
@@ -27,6 +28,10 @@ pub enum ProofCommand {
     Verify(VerifyArgs),
     /// Report a proof's serialized size and (optionally) sub-section breakdown.
     Size(SizeArgs),
+    /// Decompose every header in a proof into per-field byte counts.
+    /// Aggregates min/median/mean/p95/max per field across the whole chain
+    /// and prints a table. Use this to answer "where do the ~6 KB go?"
+    HeaderStats(HeaderStatsArgs),
 }
 
 #[derive(Args)]
@@ -71,6 +76,16 @@ pub struct SizeArgs {
     pub breakdown: bool,
 }
 
+#[derive(Args)]
+pub struct HeaderStatsArgs {
+    /// Path to the proof file to decompose.
+    pub proof: PathBuf,
+    /// Optional CSV output path. Writes one row per header with all field
+    /// sizes — good for paper plots. Stdout still gets the summary table.
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+}
+
 #[derive(Copy, Clone, Debug, ValueEnum)]
 pub enum Kind {
     /// Pre-KIP-6 selected-chain proof (v0.1 default).
@@ -88,6 +103,7 @@ pub async fn run(args: ProofArgs, globals: Globals) -> anyhow::Result<()> {
         ProofCommand::Generate(a) => generate(a, globals).await,
         ProofCommand::Verify(a) => verify(a, globals).await,
         ProofCommand::Size(a) => size(a, globals).await,
+        ProofCommand::HeaderStats(a) => header_stats(a, globals).await,
     }
 }
 
@@ -263,6 +279,323 @@ async fn size(args: SizeArgs, globals: Globals) -> anyhow::Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+// ─── header-stats ─────────────────────────────────────────────────────────
+
+async fn header_stats(args: HeaderStatsArgs, globals: Globals) -> anyhow::Result<()> {
+    let bytes = std::fs::read(&args.proof).with_context(|| format!("reading {}", args.proof.display()))?;
+    let env = ProofEnvelope::deserialize(&bytes).map_err(|e| anyhow!("failed to decode proof: {e}"))?;
+
+    if env.format_version != kun_core::PROOF_FORMAT_V1 {
+        anyhow::bail!("unsupported proof format version: {}", env.format_version);
+    }
+
+    // Pull the chain. Only Diamond proofs carry a chain; PoChM/TxR/PoP have
+    // a different shape and aren't relevant for v0.1.1's measurement focus.
+    let chain: &[AnyHeader] = match &env.payload {
+        ProofPayload::Diamond(dp) => &dp.chain,
+        _ => anyhow::bail!("header-stats currently only supports diamond proofs"),
+    };
+
+    if chain.is_empty() {
+        anyhow::bail!("proof's chain is empty; nothing to decompose");
+    }
+
+    eprintln!("decomposing {} headers from {} ...", chain.len(), args.proof.display());
+
+    let mut breakdowns: Vec<HeaderSizeBreakdown> = Vec::with_capacity(chain.len());
+    for h in chain {
+        breakdowns.push(h.field_sizes());
+    }
+
+    // Optional CSV — one row per header.
+    if let Some(ref out) = args.out {
+        write_header_stats_csv(out, &breakdowns).with_context(|| format!("writing {}", out.display()))?;
+        eprintln!("CSV: {}", out.display());
+    }
+
+    // Aggregate per field.
+    let n = breakdowns.len();
+    let agg = aggregate_header_stats(&breakdowns);
+    let mean_total = agg.totals.mean();
+
+    if globals.json {
+        let payload = serde_json::json!({
+            "proof_path": args.proof.display().to_string(),
+            "chain_length": n,
+            "fields": agg.json_value(),
+            "mean_total_bytes": mean_total,
+        });
+        serde_json::to_writer_pretty(std::io::stdout(), &payload)?;
+        println!();
+        return Ok(());
+    }
+
+    // Human table.
+    let total_serialized: u64 = breakdowns.iter().map(|b| b.serialized_total as u64).sum();
+    println!("# kun proof header-stats");
+    println!("proof file        : {}", args.proof.display());
+    println!("chain headers     : {n}");
+    println!("total header bytes: {total_serialized}");
+    println!();
+    println!(
+        "{:<32} | {:>8} | {:>8} | {:>10} | {:>8} | {:>8} | {:>8}",
+        "field", "min", "median", "mean", "p95", "max", "% mean"
+    );
+    println!("{:-<32} | {:->8} | {:->8} | {:->10} | {:->8} | {:->8} | {:->8}", "", "", "", "", "", "", "");
+    for row in agg.rows() {
+        let pct = if mean_total > 0.0 { 100.0 * row.stats.mean() / mean_total } else { 0.0 };
+        println!(
+            "{:<32} | {:>8} | {:>8} | {:>10.1} | {:>8} | {:>8} | {:>7.2}%",
+            row.label,
+            row.stats.min,
+            row.stats.median,
+            row.stats.mean(),
+            row.stats.p95,
+            row.stats.max,
+            pct
+        );
+    }
+    println!("{:-<32} | {:->8} | {:->8} | {:->10} | {:->8} | {:->8} | {:->8}", "", "", "", "", "", "", "");
+    println!(
+        "{:<32} | {:>8} | {:>8} | {:>10.1} | {:>8} | {:>8} | {:>7.2}%",
+        "TOTAL (serialized)",
+        agg.totals.min,
+        agg.totals.median,
+        agg.totals.mean(),
+        agg.totals.p95,
+        agg.totals.max,
+        100.0
+    );
+
+    // Stripped-header sketch + KIP-6 PoChM projection. log2(N) where
+    // N = posterity-window seconds (24 h = 86,400) ≈ 17.
+    println!();
+    let pbl_mean = agg.parents_by_level.mean();
+    let pbl_pct = if mean_total > 0.0 { 100.0 * pbl_mean / mean_total } else { 0.0 };
+    println!("dominant field    : parents_by_level ({pbl_mean:.0} bytes mean = {pbl_pct:.1}% of header)");
+    let stripped = 32_f64 + 33_f64 + 32_f64; // selected_parent + Some(cached_hash) + future PMR
+    println!("stripped-header   : ~{stripped:.0} bytes (selected_parent + cached_hash + post-KIP-6 PMR)");
+    let log2n: f64 = 17.0;
+    let log2log2n: f64 = log2n.log2();
+    let l_a: f64 = 32.0;
+    let merkle_term = (2.0 * log2log2n + 1.0) * log2n * l_a;
+    let full = merkle_term + mean_total * (log2n - 1.0);
+    let strip = merkle_term + stripped * (log2n - 1.0);
+    println!();
+    println!("KIP-6 PoChM size projection (N=86,400, log2(N)≈17):");
+    println!("  with full headers as PMR leaves     : ~{:.0} bytes (~{:.1} KB)", full, full / 1024.0);
+    println!("  with stripped headers as PMR leaves : ~{:.0} bytes (~{:.1} KB)", strip, strip / 1024.0);
+    println!();
+    println!("Caveats: see EMPIRICAL_NOTES.md — these projections assume log2(N)≈17");
+    println!("and a single posterity epoch; real PoChM size also depends on the");
+    println!("Hamming weight of posterity_depth(B), bounded above by log2(N).");
+
+    Ok(())
+}
+
+#[derive(Clone, Copy, Default)]
+struct FieldStats {
+    min: u64,
+    max: u64,
+    median: u64,
+    p95: u64,
+    sum: u64,
+    n: u64,
+}
+
+impl FieldStats {
+    fn mean(&self) -> f64 {
+        if self.n == 0 {
+            0.0
+        } else {
+            self.sum as f64 / self.n as f64
+        }
+    }
+
+    fn from_slice(values: &mut [usize]) -> Self {
+        if values.is_empty() {
+            return Self::default();
+        }
+        values.sort_unstable();
+        let n = values.len();
+        let min = values[0] as u64;
+        let max = values[n - 1] as u64;
+        let median = values[n / 2] as u64;
+        let p95_idx = ((n.saturating_sub(1)) * 95) / 100;
+        let p95 = values[p95_idx] as u64;
+        let sum: u64 = values.iter().map(|v| *v as u64).sum();
+        Self { min, max, median, p95, sum, n: n as u64 }
+    }
+}
+
+struct AggregateRow {
+    label: &'static str,
+    stats: FieldStats,
+}
+
+struct HeaderStatsAgg {
+    envelope_discriminant: FieldStats,
+    cached_hash: FieldStats,
+    version: FieldStats,
+    parents_by_level: FieldStats,
+    hash_merkle_root: FieldStats,
+    accepted_id_merkle_root: FieldStats,
+    utxo_commitment: FieldStats,
+    timestamp: FieldStats,
+    bits: FieldStats,
+    nonce: FieldStats,
+    daa_score: FieldStats,
+    blue_work: FieldStats,
+    blue_score: FieldStats,
+    pruning_point: FieldStats,
+    pmr: FieldStats,
+    framing_overhead: FieldStats,
+    totals: FieldStats,
+}
+
+impl HeaderStatsAgg {
+    fn rows(&self) -> Vec<AggregateRow> {
+        vec![
+            AggregateRow { label: "parents_by_level", stats: self.parents_by_level },
+            AggregateRow { label: "cached_hash (Option<Hash>)", stats: self.cached_hash },
+            AggregateRow { label: "envelope_discriminant", stats: self.envelope_discriminant },
+            AggregateRow { label: "version", stats: self.version },
+            AggregateRow { label: "hash_merkle_root", stats: self.hash_merkle_root },
+            AggregateRow { label: "accepted_id_merkle_root", stats: self.accepted_id_merkle_root },
+            AggregateRow { label: "utxo_commitment", stats: self.utxo_commitment },
+            AggregateRow { label: "timestamp", stats: self.timestamp },
+            AggregateRow { label: "bits", stats: self.bits },
+            AggregateRow { label: "nonce", stats: self.nonce },
+            AggregateRow { label: "daa_score", stats: self.daa_score },
+            AggregateRow { label: "blue_work", stats: self.blue_work },
+            AggregateRow { label: "blue_score", stats: self.blue_score },
+            AggregateRow { label: "pruning_point", stats: self.pruning_point },
+            AggregateRow { label: "pmr (V2 only)", stats: self.pmr },
+            AggregateRow { label: "framing overhead", stats: self.framing_overhead },
+        ]
+    }
+
+    fn json_value(&self) -> serde_json::Value {
+        let v = |s: &FieldStats| {
+            serde_json::json!({
+                "min": s.min, "median": s.median, "mean": s.mean(),
+                "p95": s.p95, "max": s.max, "n": s.n,
+            })
+        };
+        serde_json::json!({
+            "parents_by_level": v(&self.parents_by_level),
+            "cached_hash": v(&self.cached_hash),
+            "envelope_discriminant": v(&self.envelope_discriminant),
+            "version": v(&self.version),
+            "hash_merkle_root": v(&self.hash_merkle_root),
+            "accepted_id_merkle_root": v(&self.accepted_id_merkle_root),
+            "utxo_commitment": v(&self.utxo_commitment),
+            "timestamp": v(&self.timestamp),
+            "bits": v(&self.bits),
+            "nonce": v(&self.nonce),
+            "daa_score": v(&self.daa_score),
+            "blue_work": v(&self.blue_work),
+            "blue_score": v(&self.blue_score),
+            "pruning_point": v(&self.pruning_point),
+            "pmr": v(&self.pmr),
+            "framing_overhead": v(&self.framing_overhead),
+            "totals": v(&self.totals),
+        })
+    }
+}
+
+fn aggregate_header_stats(breakdowns: &[HeaderSizeBreakdown]) -> HeaderStatsAgg {
+    let extract = |f: fn(&HeaderSizeBreakdown) -> usize| -> Vec<usize> { breakdowns.iter().map(f).collect::<Vec<_>>() };
+    let mut envelope = extract(|b| b.envelope_discriminant);
+    let mut cached_hash = extract(|b| b.cached_hash);
+    let mut version = extract(|b| b.version);
+    let mut parents_by_level = extract(|b| b.parents_by_level);
+    let mut hash_merkle_root = extract(|b| b.hash_merkle_root);
+    let mut accepted_id_merkle_root = extract(|b| b.accepted_id_merkle_root);
+    let mut utxo_commitment = extract(|b| b.utxo_commitment);
+    let mut timestamp = extract(|b| b.timestamp);
+    let mut bits = extract(|b| b.bits);
+    let mut nonce = extract(|b| b.nonce);
+    let mut daa_score = extract(|b| b.daa_score);
+    let mut blue_work = extract(|b| b.blue_work);
+    let mut blue_score = extract(|b| b.blue_score);
+    let mut pruning_point = extract(|b| b.pruning_point);
+    let mut pmr = extract(|b| b.pmr);
+    let mut framing = extract(|b| b.framing_overhead);
+    let mut totals = extract(|b| b.serialized_total);
+
+    HeaderStatsAgg {
+        envelope_discriminant: FieldStats::from_slice(&mut envelope),
+        cached_hash: FieldStats::from_slice(&mut cached_hash),
+        version: FieldStats::from_slice(&mut version),
+        parents_by_level: FieldStats::from_slice(&mut parents_by_level),
+        hash_merkle_root: FieldStats::from_slice(&mut hash_merkle_root),
+        accepted_id_merkle_root: FieldStats::from_slice(&mut accepted_id_merkle_root),
+        utxo_commitment: FieldStats::from_slice(&mut utxo_commitment),
+        timestamp: FieldStats::from_slice(&mut timestamp),
+        bits: FieldStats::from_slice(&mut bits),
+        nonce: FieldStats::from_slice(&mut nonce),
+        daa_score: FieldStats::from_slice(&mut daa_score),
+        blue_work: FieldStats::from_slice(&mut blue_work),
+        blue_score: FieldStats::from_slice(&mut blue_score),
+        pruning_point: FieldStats::from_slice(&mut pruning_point),
+        pmr: FieldStats::from_slice(&mut pmr),
+        framing_overhead: FieldStats::from_slice(&mut framing),
+        totals: FieldStats::from_slice(&mut totals),
+    }
+}
+
+#[derive(Serialize)]
+struct CsvRow {
+    index: usize,
+    envelope_discriminant: usize,
+    cached_hash: usize,
+    version: usize,
+    parents_by_level: usize,
+    hash_merkle_root: usize,
+    accepted_id_merkle_root: usize,
+    utxo_commitment: usize,
+    timestamp: usize,
+    bits: usize,
+    nonce: usize,
+    daa_score: usize,
+    blue_work: usize,
+    blue_score: usize,
+    pruning_point: usize,
+    pmr: usize,
+    framing_overhead: usize,
+    serialized_total: usize,
+}
+
+fn write_header_stats_csv(out: &PathBuf, breakdowns: &[HeaderSizeBreakdown]) -> anyhow::Result<()> {
+    let file = std::fs::File::create(out)?;
+    let mut wtr = csv::Writer::from_writer(file);
+    for (i, b) in breakdowns.iter().enumerate() {
+        wtr.serialize(CsvRow {
+            index: i,
+            envelope_discriminant: b.envelope_discriminant,
+            cached_hash: b.cached_hash,
+            version: b.version,
+            parents_by_level: b.parents_by_level,
+            hash_merkle_root: b.hash_merkle_root,
+            accepted_id_merkle_root: b.accepted_id_merkle_root,
+            utxo_commitment: b.utxo_commitment,
+            timestamp: b.timestamp,
+            bits: b.bits,
+            nonce: b.nonce,
+            daa_score: b.daa_score,
+            blue_work: b.blue_work,
+            blue_score: b.blue_score,
+            pruning_point: b.pruning_point,
+            pmr: b.pmr,
+            framing_overhead: b.framing_overhead,
+            serialized_total: b.serialized_total,
+        })?;
+    }
+    wtr.flush()?;
     Ok(())
 }
 

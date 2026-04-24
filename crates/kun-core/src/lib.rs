@@ -15,7 +15,7 @@ pub mod proof;
 
 pub use error::VerifyError;
 pub use hash::{scheme_for, Blake2bScheme, Blake3Scheme, Hash, HashEra, HashScheme, HASH_SIZE};
-pub use header::{AnyHeader, BlockHeader, BlockHeaderV2, HEADER_HASH_TAG};
+pub use header::{AnyHeader, BlockHeader, BlockHeaderV2, HeaderSizeBreakdown, HEADER_HASH_TAG};
 pub use merkle::{
     merkle_proof, merkle_root, verify_merkle_proof, MerkleError, MerkleProof, ATMR_LEAF_TAG, ATMR_NODE_TAG,
     PMR_LEAF_TAG, PMR_NODE_TAG,
