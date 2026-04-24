@@ -15,10 +15,8 @@ mod output;
 use commands::{Command, TopLevel};
 
 fn main() -> ExitCode {
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("failed to build Tokio runtime");
+    let runtime =
+        tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("failed to build Tokio runtime");
     runtime.block_on(async_main())
 }
 

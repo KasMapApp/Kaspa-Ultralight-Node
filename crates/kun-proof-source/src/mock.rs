@@ -139,7 +139,7 @@ impl ProofSource for MockProofSource {
         }
         // Anchor (older, index pi) → target (newer, index bi) — no reverse.
         let chain = self.chain.read().clone();
-        let segment: Vec<Hash> = chain[pi..=bi].iter().copied().collect();
+        let segment: Vec<Hash> = chain[pi..=bi].to_vec();
         let mut out = Vec::with_capacity(segment.len());
         for h in segment {
             out.push(self.get_header(h).await?);

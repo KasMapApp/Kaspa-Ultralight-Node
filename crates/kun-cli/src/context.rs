@@ -17,6 +17,9 @@ pub struct Ctx {
     pub hs: Arc<dyn HashScheme>,
     pub src: Arc<RpcProofSource>,
     pub data_dir: PathBuf,
+    /// Loaded config; kept on the context so v0.2 subcommands can read it
+    /// without re-parsing `~/.kun/config.json` (currently unread in v0.1).
+    #[allow(dead_code)]
     pub cfg: Config,
 }
 

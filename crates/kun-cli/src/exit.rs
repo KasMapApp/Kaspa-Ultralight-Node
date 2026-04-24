@@ -1,5 +1,10 @@
 //! Exit-code classification. Every CLI error maps to a stable exit code so
 //! scripts and CI can make decisions without parsing text.
+//!
+//! `USAGE` and `PARTIAL` are reserved for v0.2 (not emitted by any v0.1
+//! code path yet, but part of the stable CLI contract).
+
+#![allow(dead_code)]
 
 use anyhow::Error;
 

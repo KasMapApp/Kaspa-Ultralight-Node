@@ -192,12 +192,7 @@ mod tests {
 
     #[test]
     fn envelope_version_byte_is_first_byte_of_serialization() {
-        let dp = DiamondProof {
-            target: Hash::ZERO,
-            posterity_anchor: Hash::ZERO,
-            chain: vec![],
-            aux_parents: vec![],
-        };
+        let dp = DiamondProof { target: Hash::ZERO, posterity_anchor: Hash::ZERO, chain: vec![], aux_parents: vec![] };
         let bytes = ProofEnvelope::diamond(dp).serialize();
         assert_eq!(bytes[0], PROOF_FORMAT_V1);
     }
@@ -206,12 +201,7 @@ mod tests {
     fn corrupt_bytes_never_panic_on_deserialize() {
         // Property test lite: verify random truncations and bit-flips return
         // Err, never panic. Proptest covers the full space in its own module.
-        let dp = DiamondProof {
-            target: Hash::ZERO,
-            posterity_anchor: Hash::ZERO,
-            chain: vec![],
-            aux_parents: vec![],
-        };
+        let dp = DiamondProof { target: Hash::ZERO, posterity_anchor: Hash::ZERO, chain: vec![], aux_parents: vec![] };
         let bytes = ProofEnvelope::diamond(dp).serialize();
         for trunc in 0..bytes.len() {
             let _ = ProofEnvelope::deserialize(&bytes[..trunc]);

@@ -42,7 +42,7 @@ impl Hash {
             if b == 0 {
                 total += 8;
             } else {
-                total += u32::from(b.leading_zeros());
+                total += b.leading_zeros();
                 break;
             }
         }
@@ -230,7 +230,8 @@ mod tests {
 
     #[test]
     fn hash_from_str_accepts_prefix_and_any_case() {
-        let a: Hash = "0x".to_string().chars().chain("AB".chars().cycle().take(64)).collect::<String>().parse().unwrap();
+        let a: Hash =
+            "0x".to_string().chars().chain("AB".chars().cycle().take(64)).collect::<String>().parse().unwrap();
         let b: Hash = "ab".chars().cycle().take(64).collect::<String>().parse().unwrap();
         assert_eq!(a, b);
     }

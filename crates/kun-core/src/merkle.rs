@@ -66,10 +66,7 @@ pub fn merkle_root(hs: &dyn HashScheme, leaf_tag: &[u8], node_tag: &[u8], leaves
             let last = *layer.last().unwrap();
             layer.push(last);
         }
-        layer = layer
-            .chunks(2)
-            .map(|pair| hs.hash_pair(node_tag, &pair[0], &pair[1]))
-            .collect();
+        layer = layer.chunks(2).map(|pair| hs.hash_pair(node_tag, &pair[0], &pair[1])).collect();
     }
     layer[0]
 }
@@ -109,10 +106,7 @@ pub fn merkle_proof(
         }
         dir_len += 1;
 
-        layer = layer
-            .chunks(2)
-            .map(|pair| hs.hash_pair(node_tag, &pair[0], &pair[1]))
-            .collect();
+        layer = layer.chunks(2).map(|pair| hs.hash_pair(node_tag, &pair[0], &pair[1])).collect();
         idx /= 2;
     }
     MerkleProof { leaf: leaves[index], siblings, directions: dirs, directions_len: dir_len }

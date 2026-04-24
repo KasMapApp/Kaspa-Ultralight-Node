@@ -51,7 +51,7 @@ pub fn load(data_dir: &Path) -> Result<Config> {
         return Ok(Config::default());
     }
     let bytes = std::fs::read(&path).with_context(|| format!("read {}", path.display()))?;
-    Ok(serde_json::from_slice(&bytes).with_context(|| format!("parse {}", path.display()))?)
+    serde_json::from_slice(&bytes).with_context(|| format!("parse {}", path.display()))
 }
 
 pub fn save(data_dir: &Path, cfg: &Config) -> Result<()> {

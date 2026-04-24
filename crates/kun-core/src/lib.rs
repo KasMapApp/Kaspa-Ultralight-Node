@@ -14,16 +14,15 @@ pub mod posterity;
 pub mod proof;
 
 pub use error::VerifyError;
-pub use hash::{Blake2bScheme, Blake3Scheme, Hash, HashEra, HashScheme, scheme_for, HASH_SIZE};
+pub use hash::{scheme_for, Blake2bScheme, Blake3Scheme, Hash, HashEra, HashScheme, HASH_SIZE};
 pub use header::{AnyHeader, BlockHeader, BlockHeaderV2, HEADER_HASH_TAG};
 pub use merkle::{
-    merkle_proof, merkle_root, verify_merkle_proof, MerkleError, MerkleProof, ATMR_LEAF_TAG,
-    ATMR_NODE_TAG, PMR_LEAF_TAG, PMR_NODE_TAG,
+    merkle_proof, merkle_root, verify_merkle_proof, MerkleError, MerkleProof, ATMR_LEAF_TAG, ATMR_NODE_TAG,
+    PMR_LEAF_TAG, PMR_NODE_TAG,
 };
 pub use posterity::{PosterityChain, PosterityError, PosterityHeader};
 pub use proof::{
-    DiamondProof, PoChM, PoChMStep, PoP, ProofEnvelope, ProofKind, ProofPayload, TxReceipt,
-    PROOF_FORMAT_V1,
+    DiamondProof, PoChM, PoChMStep, PoP, ProofEnvelope, ProofKind, ProofPayload, TxReceipt, PROOF_FORMAT_V1,
 };
 
 /// Merge-set size limit (consensus parameter).

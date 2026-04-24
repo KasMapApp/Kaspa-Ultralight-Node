@@ -106,11 +106,8 @@ async fn generate(args: GenerateArgs, globals: Globals) -> anyhow::Result<()> {
             safety_depth = args.safety_depth,
             "no --block supplied; auto-picking stable selected-chain target"
         );
-        let (chosen, chain) = ctx
-            .src
-            .current_selected_chain(args.safety_depth)
-            .await
-            .context("auto-picking selected-chain target")?;
+        let (chosen, chain) =
+            ctx.src.current_selected_chain(args.safety_depth).await.context("auto-picking selected-chain target")?;
         (chosen, Some(chain))
     };
 
@@ -213,7 +210,10 @@ async fn verify(args: VerifyArgs, globals: Globals) -> anyhow::Result<()> {
                     duration_ms: u64,
                     size_bytes: usize,
                 }
-                serde_json::to_writer_pretty(std::io::stdout(), &Out { valid: true, duration_ms: elapsed_ms, size_bytes: bytes.len() })?;
+                serde_json::to_writer_pretty(
+                    std::io::stdout(),
+                    &Out { valid: true, duration_ms: elapsed_ms, size_bytes: bytes.len() },
+                )?;
                 println!();
             } else {
                 println!("VERIFIED in {elapsed_ms} ms ({} bytes)", bytes.len());
@@ -287,11 +287,7 @@ async fn ensure_posterity_file(ctx: &Ctx) -> anyhow::Result<()> {
 async fn bootstrap_posterity(ctx: &Ctx) -> anyhow::Result<PosterityChain> {
     let dag = ctx.rpc.get_block_dag_info().await?;
     let pp_header = ctx.rpc.get_block_header(dag.pruning_point).await?;
-    let entry = PosterityHeader {
-        header: pp_header,
-        posterity_depth3: dag.pruning_point,
-        chain_index: 0,
-    };
+    let entry = PosterityHeader { header: pp_header, posterity_depth3: dag.pruning_point, chain_index: 0 };
     let mut chain = PosterityChain::new();
     chain.extend(&*ctx.hs, entry)?;
     Ok(chain)
@@ -337,15 +333,15 @@ async fn build_adhoc_posterity_from_envelope(
     // need the node to still have that block — which it may have pruned.
     let header_from_proof: Option<&kun_core::AnyHeader> = match &env.payload {
         kun_core::ProofPayload::Diamond(dp) => dp.chain.first(),
-        kun_core::ProofPayload::Pochm(_) | kun_core::ProofPayload::TxReceipt(_) | kun_core::ProofPayload::Pop(_) => None,
+        kun_core::ProofPayload::Pochm(_) | kun_core::ProofPayload::TxReceipt(_) | kun_core::ProofPayload::Pop(_) => {
+            None
+        }
     };
 
     let header = if let Some(h) = header_from_proof {
         // Confirm the proof's own chain[0] hashes to the anchor we claim.
         if h.hash(&*ctx.hs) != anchor {
-            anyhow::bail!(
-                "--against hash does not match the proof's internal anchor (chain[0]); refusing to trust"
-            );
+            anyhow::bail!("--against hash does not match the proof's internal anchor (chain[0]); refusing to trust");
         }
         h.clone()
     } else {

@@ -108,12 +108,12 @@ impl KunRpc {
         let client = KaspaRpcClient::new(cfg.encoding, cfg.url.as_deref(), resolver, Some(cfg.network), None)
             .map_err(|e| RpcError::Construction(e.to_string()))?;
 
-        let mut opts = ConnectOptions::default();
-        opts.block_async_connect = true;
-        opts.connect_timeout = Some(cfg.connect_timeout);
-        if let Some(url) = cfg.url.clone() {
-            opts.url = Some(url);
-        }
+        let opts = ConnectOptions {
+            block_async_connect: true,
+            connect_timeout: Some(cfg.connect_timeout),
+            url: cfg.url.clone(),
+            ..ConnectOptions::default()
+        };
 
         client.connect(Some(opts)).await.map_err(|e| RpcError::Connect(e.to_string()))?;
 
@@ -158,11 +158,8 @@ impl KunRpc {
     }
 
     pub async fn get_block_header(&self, hash: Hash) -> Result<AnyHeader> {
-        let block = self
-            .inner
-            .get_block(rpc_hash_from_kun(hash), false)
-            .await
-            .map_err(|e| RpcError::Remote(e.to_string()))?;
+        let block =
+            self.inner.get_block(rpc_hash_from_kun(hash), false).await.map_err(|e| RpcError::Remote(e.to_string()))?;
         rpc_header_into_any(block.header)
     }
 
@@ -192,7 +189,12 @@ impl KunRpc {
         let accepted_tx_ids = r
             .accepted_transaction_ids
             .into_iter()
-            .map(|e| (hash_from_kaspa(e.accepting_block_hash), e.accepted_transaction_ids.into_iter().map(hash_from_kaspa).collect()))
+            .map(|e| {
+                (
+                    hash_from_kaspa(e.accepting_block_hash),
+                    e.accepted_transaction_ids.into_iter().map(hash_from_kaspa).collect(),
+                )
+            })
             .collect();
         Ok(VirtualChain { added, removed, accepted_tx_ids })
     }

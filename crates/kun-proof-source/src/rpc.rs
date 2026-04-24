@@ -28,11 +28,7 @@ pub struct RpcProofSource {
 
 impl RpcProofSource {
     pub fn new(rpc: KunRpc, hs: Arc<dyn HashScheme>) -> Self {
-        Self {
-            rpc,
-            hs,
-            cache: Mutex::new(LruCache::new(NonZeroUsize::new(DEFAULT_HEADER_CACHE).expect("nonzero"))),
-        }
+        Self { rpc, hs, cache: Mutex::new(LruCache::new(NonZeroUsize::new(DEFAULT_HEADER_CACHE).expect("nonzero"))) }
     }
 
     pub fn with_cache_size(rpc: KunRpc, hs: Arc<dyn HashScheme>, size: usize) -> Self {
@@ -206,10 +202,8 @@ impl ProofSource for RpcProofSource {
         //    itself is not in `selected_chain_hashes`. If the target wasn't
         //    seen during the full walk up to virtual, it's not a selected-
         //    chain block (parallel tip / merged-only block). Fail loudly.
-        let target_idx = selected_chain_hashes
-            .iter()
-            .position(|h| *h == b)
-            .ok_or(ProofSourceError::NotOnSelectedChain(b))?;
+        let target_idx =
+            selected_chain_hashes.iter().position(|h| *h == b).ok_or(ProofSourceError::NotOnSelectedChain(b))?;
         selected_chain_hashes.truncate(target_idx + 1);
 
         // 4. Fetch each header. LRU cache absorbs repeat calls when a later
@@ -236,11 +230,7 @@ impl ProofSource for RpcProofSource {
             }
         }
 
-        info!(
-            total = headers.len(),
-            elapsed_ms = t0.elapsed().as_millis() as u64,
-            "diamond chain complete"
-        );
+        info!(total = headers.len(), elapsed_ms = t0.elapsed().as_millis() as u64, "diamond chain complete");
         // headers[0] = anchor, headers[last] = target → matches DiamondProof convention.
         Ok(headers)
     }

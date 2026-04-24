@@ -11,10 +11,10 @@ pub mod proof;
 
 #[derive(Parser)]
 #[command(
-    name    = "kun",
+    name = "kun",
     author,
     version,
-    about  = "Kaspa Ultralight Node — proof-of-concept CLI",
+    about = "Kaspa Ultralight Node — proof-of-concept CLI",
     long_about = "Generates and verifies Kaspa PoChM proofs. v0.1 ships the pre-KIP-6 diamond-DAG baseline."
 )]
 pub struct TopLevel {
