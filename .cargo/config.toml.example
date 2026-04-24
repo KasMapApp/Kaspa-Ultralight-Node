@@ -1,0 +1,16 @@
+# Copy this file to `.cargo/config.toml` (gitignored) to override rusty-kaspa
+# git deps with a local path for hot iteration. Uncomment the block below and
+# set RUSTY_KASPA_CLONE to the path of your local rusty-kaspa checkout.
+#
+# The workspace Cargo.toml pins rusty-kaspa to v1.0.1 via git; this [patch]
+# block transparently redirects cargo to your local clone. No Cargo.toml
+# changes needed.
+
+# [patch."https://github.com/kaspanet/rusty-kaspa"]
+# kaspa-consensus-core = { path = "/path/to/your/rusty-kaspa/consensus/core" }
+# kaspa-hashes         = { path = "/path/to/your/rusty-kaspa/crypto/hashes" }
+# kaspa-merkle         = { path = "/path/to/your/rusty-kaspa/crypto/merkle" }
+# kaspa-pow            = { path = "/path/to/your/rusty-kaspa/consensus/pow" }
+# kaspa-rpc-core       = { path = "/path/to/your/rusty-kaspa/rpc/core" }
+# kaspa-wrpc-client    = { path = "/path/to/your/rusty-kaspa/rpc/wrpc/client" }
+# kaspa-notify         = { path = "/path/to/your/rusty-kaspa/notify" }

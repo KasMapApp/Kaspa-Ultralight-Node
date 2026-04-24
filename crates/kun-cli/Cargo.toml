@@ -1,0 +1,33 @@
+[package]
+name         = "kun-cli"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+description  = "KUN command-line binary. Provides `kun` with proof, dag, bench, config subcommands."
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "kun"
+path = "src/main.rs"
+
+[dependencies]
+kun-core         = { workspace = true }
+kun-rpc          = { workspace = true }
+kun-proof-source = { workspace = true }
+kun-proofs       = { workspace = true }
+
+anyhow      = { workspace = true }
+clap        = { workspace = true }
+tokio       = { workspace = true }
+tracing     = { workspace = true }
+tracing-subscriber = { workspace = true }
+borsh       = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+hex         = { workspace = true }
+directories = { workspace = true }
+csv         = { workspace = true }
+zstd        = { workspace = true }

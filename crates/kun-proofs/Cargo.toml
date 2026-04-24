@@ -1,0 +1,24 @@
+[package]
+name         = "kun-proofs"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+description  = "Diamond-DAG and PoChM (KIP-6) proof generation and verification for KUN."
+
+[lints]
+workspace = true
+
+[dependencies]
+kun-core         = { workspace = true }
+kun-proof-source = { workspace = true }
+
+async-trait = { workspace = true }
+futures     = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+tokio       = { workspace = true }
+borsh       = { workspace = true }
+
+[dev-dependencies]
+proptest    = { workspace = true }

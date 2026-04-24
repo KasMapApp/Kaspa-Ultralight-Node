@@ -1,0 +1,8 @@
+[toolchain]
+# 1.85+ is required because rusty-kaspa's transitive dep graph at tag v1.0.1
+# pins indexmap 2.14 (edition 2024). We pin to 1.90, which is what the user
+# has installed locally and what CI will provision. rusty-kaspa's own MSRV
+# (declared as 1.82) is about its library consumers, not about its deps.
+channel    = "1.90.0"
+profile    = "minimal"
+components = ["rustfmt", "clippy"]

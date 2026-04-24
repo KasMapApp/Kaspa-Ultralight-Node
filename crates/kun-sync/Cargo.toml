@@ -1,0 +1,13 @@
+[package]
+name         = "kun-sync"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+description  = "Bootstrap + catch-up orchestration FSM for KUN — reserved; ships in v0.2."
+
+[lints]
+workspace = true
+
+[dependencies]
+# Empty — reserved.

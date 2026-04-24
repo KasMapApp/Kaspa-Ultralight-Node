@@ -1,0 +1,39 @@
+/target
+Cargo.lock.bak
+**/*.rs.bk
+
+# Per-developer overrides — NEVER commit
+/.cargo/config.toml
+
+# Local data directories
+/.kun/
+~/.kun/
+
+# Editor / IDE / assistant
+/.idea/
+/.vscode/
+/.claude/
+*.swp
+*.swo
+.DS_Store
+
+# WASM artifacts
+/crates/kun-wasm/pkg/
+/crates/kun-wasm/target/
+
+# Python paper-analysis artifacts
+/paper/__pycache__/
+/paper/*.pyc
+/paper/.venv/
+
+# Benchmark + test output
+/results*.csv
+/verify*.csv
+/sizes*.csv
+/criterion/
+
+# Local proof artifacts (can be 100 MB – several GB; always regenerable)
+*.proof
+*.borsh
+*.proof.bin
+/proof-*.bin

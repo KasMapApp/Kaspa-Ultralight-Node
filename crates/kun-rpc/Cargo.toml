@@ -1,0 +1,25 @@
+[package]
+name         = "kun-rpc"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+description  = "wRPC client wrapper for KUN — connect, retry, subscribe helpers over KaspaRpcClient."
+
+[lints]
+workspace = true
+
+[dependencies]
+kun-core             = { workspace = true }
+kaspa-consensus-core = { workspace = true }
+kaspa-hashes         = { workspace = true }
+kaspa-rpc-core       = { workspace = true }
+kaspa-wrpc-client    = { workspace = true }
+
+tokio       = { workspace = true }
+async-trait = { workspace = true }
+futures     = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+backoff     = { workspace = true }
+parking_lot = { workspace = true }

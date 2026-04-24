@@ -1,0 +1,22 @@
+[package]
+name         = "kun-proof-source"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+description  = "ProofSource trait + RpcProofSource and MockProofSource impls for KUN."
+
+[lints]
+workspace = true
+
+[dependencies]
+kun-core     = { workspace = true }
+kun-rpc      = { workspace = true }
+
+async-trait  = { workspace = true }
+futures      = { workspace = true }
+thiserror    = { workspace = true }
+tracing      = { workspace = true }
+tokio        = { workspace = true }
+parking_lot  = { workspace = true }
+lru          = { workspace = true }

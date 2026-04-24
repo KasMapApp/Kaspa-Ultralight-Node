@@ -1,0 +1,13 @@
+[package]
+name         = "kun-verifier"
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+description  = "Pure stateless proof verifier — reserved; ships in v0.2 (WASM-first)."
+
+[lints]
+workspace = true
+
+[dependencies]
+# Empty — reserved.
