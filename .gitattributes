@@ -1,0 +1,29 @@
+# Normalize line endings across all platforms.
+#
+# Without this, git on Windows defaults to `core.autocrlf=true` and converts
+# LF → CRLF on checkout, which breaks `cargo fmt --check` on Windows CI
+# (our `rustfmt.toml` pins `newline_style = "Unix"`).
+#
+# With `eol=lf`, every platform — Windows included — gets LF in the working
+# copy, matching what git stores in the object database.
+
+* text=auto eol=lf
+
+# Explicit binary exclusions (should never be line-end-converted)
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.zst     binary
+*.proof   binary
+*.borsh   binary
+*.wasm    binary
+*.bin     binary
+
+# Rust source: force LF regardless of auto-detection
+*.rs      text eol=lf
+*.toml    text eol=lf
+*.md      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
