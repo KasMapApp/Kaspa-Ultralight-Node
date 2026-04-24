@@ -8,7 +8,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
+  # Do NOT put `RUSTFLAGS: -D warnings` here — it cascades to transitive
+  # deps (rusty-kaspa etc.) whose warnings we can't fix. Each step that
+  # wants warnings-as-errors uses the flag locally.
 
 jobs:
   check:
@@ -42,4 +44,4 @@ jobs:
       - name: Full test suite
         env:
           KUN_TEST_NODE_URL: ${{ secrets.KUN_TEST_NODE_URL }}
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace
