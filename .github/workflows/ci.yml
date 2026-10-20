@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# This workflow only builds and tests; it never writes back to the repo.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   # Do NOT put `RUSTFLAGS: -D warnings` here — it cascades to transitive
@@ -14,34 +18,23 @@ env:
 
 jobs:
   check:
-    name: Check + fmt + clippy + unit tests
+    name: Check + fmt + clippy + tests
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      # Third-party actions are pinned to a commit SHA rather than a moving
+      # tag: a tag can be repointed at new code without the ref here changing.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Install Rust toolchain (pinned by rust-toolchain.toml)
         run: rustup show
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Unit tests
-        run: cargo test --workspace --lib
-
-  integration:
-    name: Integration tests (gated on KUN_TEST_NODE_URL)
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup show
-      - uses: Swatinem/rust-cache@v2
-      - name: Full test suite
-        env:
-          KUN_TEST_NODE_URL: ${{ secrets.KUN_TEST_NODE_URL }}
+      - name: Tests
         run: cargo test --workspace

@@ -177,9 +177,6 @@ proof round-trip + negative cases, header hashing, posterity chain
 invariants, plus six per-field-size invariants for `HeaderSizeBreakdown`
 covering V1, V2, dense superblock-level, and `cached_hash` cases.
 
-Integration tests that require a live node are gated on the
-`KUN_TEST_NODE_URL` environment variable and skip silently when unset.
-
 ## Roadmap
 
 | Version | Scope | Status |
